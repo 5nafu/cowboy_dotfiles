@@ -195,6 +195,45 @@ function init_do() {
   source "$2"
 }
 
+###########################################
+# INTERNAL DOTFILES "GPG" VARS / FUNCTIONS
+###########################################
+
+# Initialize.
+gpg_file=$DOTFILES/caches/gpg/selected
+function gpg_files() {
+  local i f dirname oses os opt remove
+  dirname="$(dirname "$1")"
+  f=("$@")
+  menu_options=(); menu_selects=()
+  for i in "${!f[@]}"; do menu_options[i]="$(basename "${f[i]}")"; done
+  if [[ -e "$gpg_file" ]]; then
+    # Read cache file if possible
+    IFS=$'\n' read -d '' -r -a menu_selects < "$gpg_file"
+  else
+    # Otherwise default to all scripts not specifically for other OSes
+    oses=($(get_os 1))
+    for opt in "${menu_options[@]}"; do
+      remove=
+      for os in "${oses[@]}"; do
+        [[ "$opt" =~ (^|[^a-z])$os($|[^a-z]) ]] && remove=1 && break
+      done
+      [[ "$remove" ]] || menu_selects=("${menu_selects[@]}" "$opt")
+    done
+  fi
+  prompt_menu "Extract the following gpg files?" $prompt_delay
+  # Write out cache file for future reading.
+  rm "$gpg_file" 2>/dev/null
+  for i in "${!menu_selects[@]}"; do
+    echo "${menu_selects[i]}" >> "$gpg_file"
+    echo "$dirname/${menu_selects[i]}"
+  done
+}
+function gpg_do() {
+  e_header "Extracting $(basename "$2" .tgz.gpg)"
+  gpg -d -o- $2 |tar -xz -C $HOME
+}
+
 # Copy files.
 function copy_header() { e_header "Copying files into home directory"; }
 function copy_test() {
@@ -311,6 +350,10 @@ shopt -s nullglob
 # Create caches dir and init subdir, if they don't already exist.
 mkdir -p "$DOTFILES/caches/init"
 
+# Create caches dir and gpg subdir, if they don't already exist.
+mkdir -p "$DOTFILES/caches/gpg"
+
+
 # If backups are needed, this is where they'll go.
 backup_dir="$DOTFILES/backups/$(date "+%Y_%m_%d-%H_%M_%S")/"
 backup=
@@ -318,6 +361,7 @@ backup=
 # Execute code for each file in these subdirectories.
 do_stuff "copy"
 do_stuff "link"
+do_stuff "gpg"
 do_stuff "init"
 
 # Alert if backups were made.
